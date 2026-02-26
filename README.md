@@ -30,7 +30,7 @@ Generated output plots (saved automatically when you run the script):
 ### Dataset
 
 - **Name**: Credit Card Fraud Detection  
-- **Source**: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud  
+- **Source**: https://www.kaggle.com/datasets/arockiaselciaa/creditcardcsv  
 - **License**: ODbL / CC BY-SA 4.0 (commercial use allowed with attribution)  
 - **Size**: 284,807 transactions, 492 frauds (0.172% positive rate)  
 - **Features**: Time, V1–V28 (PCA-transformed), Amount, Class
@@ -45,3 +45,78 @@ scikit-learn
 matplotlib
 seaborn
 ```
+**Install dependencies:**
+```bash
+pip install torch numpy pandas scikit-learn matplotlib seaborn
+```
+**Quick Start**
+
+Download creditcard.csv from Kaggle and place it in the same folder as the script.
+
+**Run the experiment:**
+```python 
+fraud_hybrid.py
+```
+(or open fraud_hybrid.ipynb in Jupyter/Colab)
+The script will:
+
+- Load and preprocess the data (standard scaling + stratified splits)
+- Train the pure MLP and hybrid models across different λ values
+- Perform lambda tuning using validation PR-AUC + early stopping
+- Select the best model
+- Evaluate on the test set using a threshold optimized on validation
+- Generate and save the three diagnostic plots
+
+Expected runtime: 5–15 minutes on CPU (faster with GPU).
+**Core Implementation Highlights**
+**Neural Backbone**
+```Python
+class MLP(nn.Module):
+    def __init__(self, input_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.ReLU(),
+            nn.BatchNorm1d(128),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.BatchNorm1d(64),
+            nn.Linear(64, 1)
+        )
+```
+**Differentiable Rule Penalty**
+```Python
+def rule_loss(x, probs):
+    amount   = x[:, -1]
+    pca_norm = torch.norm(x[:, 1:29], dim=1)
+    suspicious = (
+        torch.sigmoid(5 * (amount   - amount.mean())) +
+        torch.sigmoid(5 * (pca_norm - pca_norm.mean()))
+    ) / 2.0
+    penalty = suspicious * torch.relu(0.6 - probs.squeeze())
+    return penalty.mean()
+```
+**Combined Loss (inside training loop)**
+```Python
+bce = criterion(logits.squeeze(), yb)
+probs = torch.sigmoid(logits)
+rl = rule_loss(xb, probs)
+loss = bce + lambda_rule * rl
+```
+**Threshold Tuning (on validation set)**
+```Python
+def find_best_threshold(y_true, probs):
+    precision, recall, thresholds = precision_recall_curve(y_true, probs)
+    f1_scores = 2 * (precision * recall) / (precision + recall + 1e-8)
+    idx = np.argmax(f1_scores)
+    return thresholds[idx]
+```
+
+**Why This Approach Helps**
+On extreme imbalance (0.172% positives), pure neural models tend to become overly conservative — predicting almost everything as non-fraud. The rule penalty provides an additional, label-independent gradient signal on suspicious transactions, pushing fraud probabilities higher when domain heuristics indicate risk — even in batches without any labeled fraud.
+
+**Limitations & Notes**
+
+The rule uses batch-relative means for suspicion thresholds. In production, replace with fixed training-set statistics to avoid inference-time drift.
+Only two simple rules are used here. You can extend with velocity, time-of-day, or learnable rule weights.
+Threshold is tuned to maximize F1 on validation — in real systems, tune to your actual cost ratio (false negative vs false positive cost).
