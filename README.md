@@ -67,7 +67,7 @@ V1–V28 are PCA-transformed features from the original anonymized transaction s
 
 ```
 neuro-symbolic-fraud-pytorch/
-├── app.py                  # Full experiment: baselines, lambda sweep, evaluation, plots
+├── fraud_hybrid.py                  # Full experiment: baselines, lambda sweep, evaluation, plots
 ├── creditcard.csv          # Not included — download from Kaggle (see below)
 ├── requirements.txt
 └── README.md
@@ -109,7 +109,7 @@ pip install -r requirements.txt
 Download `creditcard.csv` from Kaggle:
 [https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
 
-Place it in the same directory as `app.py`. The file is not included in this repo due to size.
+Place it in the same directory as `fraud_hybrid.py`. The file is not included in this repo due to size.
 
 Column layout assumed by the code:
 
